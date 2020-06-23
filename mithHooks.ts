@@ -16,8 +16,8 @@ type EffectItem = {
 // Ref Type
 
 type Ref<T> = {
-  current: T
-} 
+  current: T;
+};
 
 const areEqualArrays = (a: Array<any>, b: Array<any>) => {
   for (let i = 0; i < a.length; i++) {
@@ -36,7 +36,7 @@ let currentRefHookStateIdx: number | undefined;
 let currentEffectHookState: Array<EffectItem> | undefined;
 let currentEffectHookStateIdx: number | undefined;
 
-export const useRef = <T>(initialValue: T): Ref<T> => {
+export const useRef = <T extends {}>(initialValue: T): Ref<T> => {
   // so that it refers to the correct idx in setRef();
   const idx = currentRefHookStateIdx as number;
 
@@ -76,7 +76,10 @@ export const useState = <T>(initialState: T): [T, (x: T) => void] => {
   return ret;
 };
 
-export const useEffect = (userfn: EffectFn, dependencies?: Array<any>): void => {
+export const useEffect = (
+  userfn: EffectFn,
+  dependencies?: Array<any>
+): void => {
   const idx = currentEffectHookStateIdx as number;
 
   // registering hook for the first time
@@ -94,12 +97,14 @@ export const useEffect = (userfn: EffectFn, dependencies?: Array<any>): void => 
   currentEffectHookStateIdx!++;
 };
 
-export const withHooks = (viewfn: () => m.Vnode): m.Component => {
+export const withHooks = <T>(
+  viewfn: (attrs: T) => m.Children | null | void
+): m.Component<T> => {
   // actually contains the state;
   const stateHookState: Array<any> = [];
   const effectHookState: Array<EffectItem> = [];
 
-  const newviewfn = () => {
+  const newviewfn = (vnode: m.Vnode<T>) => {
     // initial StateHookState
     currentStateHookState = stateHookState;
     currentStateHookStateIdx = 0;
@@ -107,10 +112,10 @@ export const withHooks = (viewfn: () => m.Vnode): m.Component => {
     currentEffectHookState = effectHookState;
     currentEffectHookStateIdx = 0;
     // initial RefHookState
-    currentRefHookState = []
-    currentRefHookStateIdx = 0
+    currentRefHookState = [];
+    currentRefHookStateIdx = 0;
     // run the view function;
-    const rendered = viewfn();
+    const rendered = viewfn(vnode.attrs);
     // Not necessary, but undefined behavior so doing this to prevent bugs;
     // TODO: don't include this part in a production build.
     currentStateHookStateIdx = undefined;
@@ -140,7 +145,9 @@ export const withHooks = (viewfn: () => m.Vnode): m.Component => {
           stale = true;
         }
         if (effect._oldDependencies && effect._newDependencies) {
-          if (!areEqualArrays(effect._oldDependencies, effect._newDependencies)) {
+          if (
+            !areEqualArrays(effect._oldDependencies, effect._newDependencies)
+          ) {
             stale = true;
           }
         }
@@ -166,4 +173,3 @@ export const withHooks = (viewfn: () => m.Vnode): m.Component => {
     view: newviewfn
   };
 };
-
