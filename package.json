@@ -1,13 +1,13 @@
 {
   "name": "mithhooks",
   "version": "1.0.0",
-  "description": "A registration is an object that fully or partially fulfills the criteria of a mithril component.",
+  "description": "Hooks for mithril",
   "main": "mithHooks.js",
   "scripts": {
     "build": "npx rollup -c"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "Vijay Marupudi <robot@vijaymarupudi.com>",
+  "license": "LGPL-3.0-or-later",
   "peerDependencies": {
     "mithril": "^2.0.4"
   },
