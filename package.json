@@ -4,7 +4,7 @@
   "description": "A registration is an object that fully or partially fulfills the criteria of a mithril component.",
   "main": "mithHooks.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npx rollup -c"
   },
   "author": "",
   "license": "ISC",
