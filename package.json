@@ -1,0 +1,14 @@
+{
+  "name": "mithhooks",
+  "version": "1.0.0",
+  "description": "A registration is an object that fully or partially fulfills the criteria of a mithril component.",
+  "main": "mithHooks.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mithril": "^2.0.4"
+  }
+}
