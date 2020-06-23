@@ -1,15 +1,23 @@
 import m from "mithril";
 
+// Effect Types
 type CleanupFn = () => void;
 
 type EffectFn = () => CleanupFn | void;
 
+// underscores so that terser can mangle property names.
 type EffectItem = {
   _fn: EffectFn;
   _cleanupfn?: CleanupFn;
   _newDependencies?: Array<any>;
   _oldDependencies?: Array<any>;
 };
+
+// Ref Type
+
+type Ref<T> = {
+  current: T
+} 
 
 const areEqualArrays = (a: Array<any>, b: Array<any>) => {
   for (let i = 0; i < a.length; i++) {
@@ -23,49 +31,42 @@ const areEqualArrays = (a: Array<any>, b: Array<any>) => {
 // global references for convenient hooks
 let currentStateHookState: Array<any> | undefined;
 let currentStateHookStateIdx: number | undefined;
-let currentRefHookState: Array<any> | undefined;
+let currentRefHookState: Array<Ref<any>> | undefined;
 let currentRefHookStateIdx: number | undefined;
 let currentEffectHookState: Array<EffectItem> | undefined;
 let currentEffectHookStateIdx: number | undefined;
 
-export const useRef = <T>(initialRef: T) => {
+export const useRef = <T>(initialValue: T): Ref<T> => {
   // so that it refers to the correct idx in setRef();
   const idx = currentRefHookStateIdx as number;
 
   // type assertion
-  const hookRef = currentRefHookState!;
+  const hookRefState = currentRefHookState!;
 
   if (currentRefHookState![idx] === undefined) {
-    hookRef[idx] = initialRef;
+    hookRefState[idx] = { current: initialValue };
   }
-
-  const ret = [
-    hookRef[idx],
-    (newRef: T) => {
-      hookRef[idx] = newRef;
-    }
-  ];
 
   // wrap up for next hook;
   currentRefHookStateIdx = idx + 1;
-  return ret;
+  return hookRefState[idx];
 };
 
-export const useState = <T>(initialState: T) => {
+export const useState = <T>(initialState: T): [T, (x: T) => void] => {
   // so that it refers to the correct idx in setState();
   const idx = currentStateHookStateIdx as number;
 
   // type assertion
-  const hookState = currentStateHookState!;
+  const stateHookState = currentStateHookState!;
 
   if (currentStateHookState![idx] === undefined) {
-    hookState[idx] = initialState;
+    stateHookState[idx] = initialState;
   }
 
-  const ret = [
-    hookState[idx],
+  const ret: [T, (x: T) => void] = [
+    stateHookState[idx],
     (newState: T) => {
-      hookState[idx] = newState;
+      stateHookState[idx] = newState;
       m.redraw();
     }
   ];
@@ -75,7 +76,7 @@ export const useState = <T>(initialState: T) => {
   return ret;
 };
 
-export const useEffect = (userfn: EffectFn, dependencies?: Array<any>) => {
+export const useEffect = (userfn: EffectFn, dependencies?: Array<any>): void => {
   const idx = currentEffectHookStateIdx as number;
 
   // registering hook for the first time
@@ -93,7 +94,7 @@ export const useEffect = (userfn: EffectFn, dependencies?: Array<any>) => {
   currentEffectHookStateIdx!++;
 };
 
-export const withHooks = (viewfn: () => m.Vnode) => {
+export const withHooks = (viewfn: () => m.Vnode): m.Component => {
   // actually contains the state;
   const stateHookState: Array<any> = [];
   const effectHookState: Array<EffectItem> = [];
