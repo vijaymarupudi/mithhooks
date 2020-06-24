@@ -1,7 +1,7 @@
 "use strict";
 
 import m from "mithril";
-import { withHooks, useState, useEffect } from "./mithHooks";
+import { withHooks, useState, useEffect } from "../mithHooks";
 
 const useTime = (ms: number) => {
   const [time, setTime] = useState(performance.now());

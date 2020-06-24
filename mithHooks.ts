@@ -1,11 +1,11 @@
 import m from "mithril";
 
+// Internal props have underscores so that terser can mangle property names.
+
 // Effect Types
+
 type CleanupFn = () => void;
-
 type EffectFn = () => CleanupFn | void;
-
-// underscores so that terser can mangle property names.
 type EffectItem = {
   _fn: EffectFn;
   _cleanupfn?: CleanupFn;
@@ -13,7 +13,17 @@ type EffectItem = {
   _oldDependencies?: Array<any>;
 };
 
-// Ref Type
+// useState types
+
+type Setter<T> = (x: T) => T;
+type SetState<T> = (x: T | Setter<T>) => void;
+type UseStateReturn<T> = [T, SetState<T>];
+type StateItem<T> = {
+  _state: T;
+  _setState: SetState<T>;
+}
+
+// useRefTypes
 
 type Ref<T> = {
   current: T;
@@ -31,49 +41,57 @@ const areEqualArrays = (a: Array<any>, b: Array<any>) => {
 // global references for convenient hooks
 let currentStateHookState: Array<any> | undefined;
 let currentStateHookStateIdx: number | undefined;
-let currentRefHookState: Array<Ref<any>> | undefined;
-let currentRefHookStateIdx: number | undefined;
 let currentEffectHookState: Array<EffectItem> | undefined;
 let currentEffectHookStateIdx: number | undefined;
 
 export const useRef = <T extends {}>(initialValue: T): Ref<T> => {
   // so that it refers to the correct idx in setRef();
-  const idx = currentRefHookStateIdx as number;
+  const idx = currentStateHookStateIdx as number;
 
   // type assertion
-  const hookRefState = currentRefHookState!;
+  const hookRefState = currentStateHookState as Ref<T>[];
 
-  if (currentRefHookState![idx] === undefined) {
+  if (hookRefState[idx] === undefined) {
     hookRefState[idx] = { current: initialValue };
   }
 
   // wrap up for next hook;
-  currentRefHookStateIdx = idx + 1;
+  currentStateHookStateIdx = idx + 1;
   return hookRefState[idx];
 };
 
-export const useState = <T>(initialState: T): [T, (x: T) => void] => {
+
+export const useState = <T>(initialState: T): UseStateReturn<T> => {
   // so that it refers to the correct idx in setState();
   const idx = currentStateHookStateIdx as number;
 
   // type assertion
-  const stateHookState = currentStateHookState!;
+  const stateHookState = currentStateHookState as StateItem<T>[];
 
   if (currentStateHookState![idx] === undefined) {
-    stateHookState[idx] = initialState;
+
+    // the only thing this captures is the index, and the stateHookState;
+    const setState: SetState<T> = newState => {
+      const finalNewState: T =
+        typeof newState === "function"
+          ? (newState as (x: T) => T)(stateHookState[idx]._state)
+          : newState;
+      stateHookState[idx] = { _state: finalNewState, _setState: setState };
+      m.redraw();
+    };
+    stateHookState[idx] = { _state: initialState, _setState: setState }
+
   }
 
-  const ret: [T, (x: T) => void] = [
-    stateHookState[idx],
-    (newState: T) => {
-      stateHookState[idx] = newState;
-      m.redraw();
-    }
-  ];
+
+  // this can change
+  const state = stateHookState[idx]._state;
+  // this never changes after first assignment
+  const setState = stateHookState[idx]._setState;
 
   // wrap up for next hook;
   currentStateHookStateIdx = idx + 1;
-  return ret;
+  return [state, setState];
 };
 
 export const useEffect = (
@@ -99,47 +117,17 @@ export const useEffect = (
 
 export const withHooks = <T>(
   viewfn: (attrs: T) => m.Children | null | void
-): m.Component<T> => {
-  // actually contains the state;
-  const stateHookState: Array<any> = [];
-  const effectHookState: Array<EffectItem> = [];
+): m.ClosureComponent<T> => {
+  // returns a closure component, new state per component.
 
-  const newviewfn = (vnode: m.Vnode<T>) => {
-    // initial StateHookState
-    currentStateHookState = stateHookState;
-    currentStateHookStateIdx = 0;
-    // initial EffectHookState
-    currentEffectHookState = effectHookState;
-    currentEffectHookStateIdx = 0;
-    // initial RefHookState
-    currentRefHookState = [];
-    currentRefHookStateIdx = 0;
-    // run the view function;
-    const rendered = viewfn(vnode.attrs);
-    // Not necessary, but undefined behavior so doing this to prevent bugs;
-    // TODO: don't include this part in a production build.
-    currentStateHookStateIdx = undefined;
-    currentStateHookStateIdx = undefined;
-    currentEffectHookState = undefined;
-    currentEffectHookStateIdx = undefined;
-    currentRefHookState = undefined;
-    currentRefHookStateIdx = undefined;
-    return rendered;
-  };
+  return function() {
+    // actually contains the state, initializing.
+    const stateHookState: Array<any> = [];
+    const effectHookState: Array<EffectItem> = [];
 
-  return {
-    oncreate() {
-      // run all the effects;
+    const update = () => {
       effectHookState.forEach(effect => {
-        const cleanup = effect._fn();
-        if (cleanup) {
-          effect._cleanupfn = cleanup;
-        }
-        effect._oldDependencies = effect._newDependencies;
-      });
-    },
-    onupdate() {
-      effectHookState.forEach(effect => {
+        // if stale, we gotta run the effect
         let stale = false;
         if (!effect._newDependencies) {
           stale = true;
@@ -161,15 +149,51 @@ export const withHooks = <T>(
         if (cleanup) {
           effect._cleanupfn = cleanup;
         }
+        // update record of dependencies
+        effect._oldDependencies = effect._newDependencies;
+        // TODO: dev flag this line, not necessary in production
+        effect._newDependencies = undefined;
       });
-    },
-    onremove() {
-      effectHookState.forEach(effect => {
-        if (effect._cleanupfn) {
-          effect._cleanupfn();
-        }
-      });
-    },
-    view: newviewfn
+    };
+
+    const newviewfn = (vnode: m.Vnode<T>) => {
+      // initial StateHookState
+      currentStateHookState = stateHookState;
+      currentStateHookStateIdx = 0;
+      // initial EffectHookState
+      currentEffectHookState = effectHookState;
+      currentEffectHookStateIdx = 0;
+      // run the view function;
+      const rendered = viewfn(vnode.attrs);
+      // Not necessary, but undefined behavior so doing this to prevent bugs;
+      // TODO: don't include this part in a production build.
+      currentStateHookStateIdx = undefined;
+      currentStateHookStateIdx = undefined;
+      currentEffectHookState = undefined;
+      currentEffectHookStateIdx = undefined;
+      return rendered;
+    };
+
+    return {
+      oncreate() {
+        // run all the effects;
+        effectHookState.forEach(effect => {
+          const cleanup = effect._fn();
+          if (cleanup) {
+            effect._cleanupfn = cleanup;
+          }
+          effect._oldDependencies = effect._newDependencies;
+        });
+      },
+      onupdate: update,
+      onremove() {
+        effectHookState.forEach(effect => {
+          if (effect._cleanupfn) {
+            effect._cleanupfn();
+          }
+        });
+      },
+      view: newviewfn
+    };
   };
 };
