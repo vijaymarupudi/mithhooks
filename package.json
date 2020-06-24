@@ -1,6 +1,6 @@
 {
   "name": "mithhooks",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Hooks for mithril",
   "scripts": {
     "build": "npx rollup -c"
